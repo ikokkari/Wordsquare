@@ -1,3 +1,9 @@
+/*
+Author: Ilkka Kokkarinen
+Date: July 29, 2024
+GitHub: https://github.com/ikokkari/Wordsquare
+*/
+
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
