@@ -6,10 +6,10 @@ The source code file `wordsquare.c` is self-contained and has no dependencies ou
 You can compile `wordsquare.c` with your favourite C compiler. You should first edit the constants `N` to determine the size of the grid, and `EXIT_AFTER_FIRST` to make the program print either only the first double square that it finds, or iterate them all in lexicographic order. Once compiled, you can run it with the command
 
 ```
-wordsquare x
+./wordsquare x
 ```
 
 where `x` is the letter at the top left corner of the word square.
 
-Both programs use backtracking search with forward checking for the unfilled grid, plus some other small optimizations. They will iterate through all possible word squares in alphabetical order of the word in the first row. Since double word squares are symmetric anyway, the word in the first column is lexicographically greater than the word in the first row.
+Both programs use backtracking search that fills the grid alternating between filling the next word in the next row and column, aided with forward checking for the unfilled cells in the remaining grid, plus some other small optimizations. They will iterate through all possible word squares in alphabetical order of the word in the first row. Since double word squares are symmetric anyway, the word in the first column is constrained to be lexicographically greater than the word in the first row, even when it of course starts with the same letter.
 
