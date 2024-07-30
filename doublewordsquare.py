@@ -1,6 +1,11 @@
 from bisect import bisect_left
 from sys import exit
 
+# Proof of concept for the algorithm to generate double word squares, later to be
+# translated to a more efficient C version.
+# Author: Ilkka Kokkarinen
+# GitHub: https://github.com/ikokkari/Wordsquare
+
 
 def compute_order(n):
     order, curr = [], 0
@@ -134,4 +139,5 @@ def word_square(n, start=None, watch=-1):
         fill_square(0, n, order, square, wordlist, dict(), dict(), watch)
 
 
-word_square(9, watch=45, start='e')
+if __name__ == '__main__':
+    word_square(4, watch=45, start='e')
