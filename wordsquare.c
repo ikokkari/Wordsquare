@@ -13,7 +13,7 @@ GitHub: https://github.com/ikokkari/Wordsquare
 #define VERBOSE 1
 
 /* Size of grid square */
-#define N 9
+#define N 6
 
 /* Maximum size of wordlist. */
 #define MAXWORDS 100000
