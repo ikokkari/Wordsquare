@@ -9,14 +9,14 @@ GitHub: https://github.com/ikokkari/Wordsquare
 #include "string.h"
 #include "assert.h"
 
+/* If we are verbose about the first word. */
+#define VERBOSE 1
+
 /* Size of grid square */
 #define N 6
 
 /* Maximum size of wordlist */
 #define MAXWORDS 100000
-
-/* Whether to output moving progress. */
-#define VERBOSE 1
 
 /* Opcodes for operations in undo stack */
 #define UNDO_DONE 0
@@ -79,7 +79,7 @@ void read_wordlist() {
   }
   fclose(file);
   if(VERBOSE) {
-    printf("Read a total of %d words of length %d.\n", word_count, N);
+    printf("Read a total of %d words of length %d.\n\n", word_count, N);
   }
   taken = calloc(word_count, sizeof(uint));
 }
@@ -314,6 +314,9 @@ void fill_square(int level) {
     if(!taken[i] && word_fits(wordlist[i], x, y, dx, dy)) {
       if(level == 0) {
         first_row_idx = i;
+        if(VERBOSE) {
+          printf("\x1b[AMoving to first word %s.\n", wordlist[i]);
+        }
       }
       for(int j = 0; j < 2 * N; j++) { to_check[j] = 0; }
       undo_push(UNDO_DONE);
