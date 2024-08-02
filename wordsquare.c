@@ -1,6 +1,6 @@
 /*
 Author: Ilkka Kokkarinen, ilkka.kokkarinen@gmail.com
-Date: Aug 2, 2024
+Date: Aug 2, 2024, update 2
 GitHub: https://github.com/ikokkari/Wordsquare
 */
 
@@ -25,6 +25,9 @@ GitHub: https://github.com/ikokkari/Wordsquare
 
 /* We don't need negative numbers for anything in this program. */
 typedef unsigned int uint;
+
+/* Two-letter prefixes that exist in words. */
+uint prefixes[26][26];
 
 /* For each cell of the square, the characters that are still possible for that cell,
    encoded as a bit vector in the lowest 26 bits of the unsigned integer. */
@@ -82,6 +85,16 @@ void read_wordlist() {
     printf("Read a total of %d words of length %d.\n\n", word_count, N);
   }
   taken = calloc(word_count, sizeof(uint));
+
+  /* Fill up the table of two-letter prefixes that exist in the wordlist. */
+  for(int i = 0; i < 26; i++) {
+    for(int j = 0; j < 26; j++) {
+      prefixes[i][j] = 0;
+    }
+  }
+  for(int i = 0; i < word_count; i++) {
+    prefixes[wordlist[i][0]-'a'][wordlist[i][1]-'a'] = 1;
+  }
 }
 
 /* Print the contents of the current square. */
@@ -255,25 +268,23 @@ int update_all_remains(int level) {
   return 1;
 }
 
-/* Verify that the the first four words placed on first two rows and columns haven't
-   created prefixes that are impossible to extend into words. */
-int verify_prefixes(int level) {
-  char buffer[N+1];
-  int x, y, dx, dy;
-  for(int v = level / 2; v < 2 * N; v++) {
-    if(v & 1) {
-      x = 0; y = v / 2; dx = 1; dy = 0;
-    }
-    else {
-      x = v / 2; y = 0; dx = 0; dy = 1;
-    }
-    find_prefix(buffer, x, y, dx, dy);
-    int i = bisect_left(buffer);
-    if(i >= word_count || !starts_with(buffer, wordlist[i])) {
+/* Verify that the two words on the first two rows are possible to complete into column words. */  
+int verify_col_prefixes() {
+  for(int j = 1; j < N; j++) {
+    if(prefixes[square[0][j]-'a'][square[1][j]-'a'] == 0) {
       return 0;
     }
   }
-  /* At least one word exists with the given prefix. */
+  return 1;
+}
+
+/* Verify that the two words on the first two columns are possible to complete into row words. */
+int verify_row_prefixes() {
+  for(int i = 2; i < N; i++) {
+    if(prefixes[square[i][0]-'a'][square[i][1]-'a'] == 0) {
+      return 0;
+    }
+  }
   return 1;
 }
 
@@ -315,15 +326,15 @@ void fill_square(int level) {
       if(level == 0) {
         first_row_idx = i;
         if(VERBOSE) {
-          printf("\x1b[AMoving to first word %s with %ld remain cutoffs.\n", wordlist[i], remain_cutoffs);
+          printf("\x1b[AMoving to word #%d %s with %ld remain cutoffs.\n", i - first_idx, wordlist[i], remain_cutoffs);
         }
       }
       for(int j = 0; j < 2 * N; j++) { to_check[j] = 0; }
       undo_push(UNDO_DONE);
       place_word(wordlist[i], x, y, dx, dy);
       if(
-         (level != 4 || verify_prefixes(4)) &&
-	 (level != 3 || verify_prefixes(3)) &&
+         (level != 2 || verify_col_prefixes()) &&
+	 (level != 3 || verify_row_prefixes()) &&
 	 (level < 4 || update_all_remains(level + 1))
       ) {
 	taken[i] = 1;
