@@ -9,12 +9,11 @@ GitHub: https://github.com/ikokkari/Wordsquare
 #include "string.h"
 #include "assert.h"
 
-/* Size of grid */
-#define N 9
+/* Size of grid square */
+#define N 6
+
 /* Maximum size of wordlist */
 #define MAXWORDS 100000
-/* Should program terminate after finding first solution? */
-#define EXIT_AFTER_FIRST 1
 
 /* Opcodes for operations in undo stack */
 #define UNDO_DONE 0
@@ -32,6 +31,9 @@ uint remain[N][N];
    or the period '.' to indicate an empty cell. */
 char square[N][N];
 
+/* The words chosen so far. */
+char word_buffer[2 * N][N + 1];
+
 /* The undo stack used to store the operations that restore previous state in backtracking. */
 uint* undo;
 int undo_top = 0;
@@ -45,16 +47,22 @@ uint* taken;
 
 /* The possible words used to fill in the double word square. */
 int word_count = 0;
-char wordlist[MAXWORDS][N+1];
+char wordlist[MAXWORDS][N + 1];
 
-/* Cutoff statistics bookkeeping. */
-unsigned long remain_cutoffs = 0;
-unsigned long remain_update = 100000000;
-unsigned long remain_goal;
-char first = '$';
+/* The start of the words to try in the first row. */
+char* first = "[none]";
+uint first_len = 0;
 
-/* Read the list of words from the file words_sorted, keeping the words of length N. */
+/* Keep track of the previous character change. */
+char prev_char = '$';
 
+/* Index to wordlist of the word on the first row. */
+uint first_idx = 0;
+
+/* Bookkeeping statistics for effectiveness of remain pruning. */
+long remain_cutoffs = 0;
+
+/* Read the list of words from the file words_sorted.txt, keeping the words of length N. */
 void read_wordlist() {
   char buffer[100];
   FILE* file = fopen("words_sorted.txt", "r");
@@ -183,7 +191,7 @@ int starts_with(char* first, char* second) {
    and goes in direction (dx, dy). Returns 1 if dead end reached, 0 otherwise. */
 int update_one_remain(int x, int y, int dx, int dy) {
   uint possible[N];
-  char buffer[N+1];
+  char buffer[N + 1];
   for(int j = 0; j < N; j++) { possible[j] = 0; }
   find_prefix(buffer, x, y, dx, dy);
   int i = bisect_left(buffer);
@@ -193,7 +201,7 @@ int update_one_remain(int x, int y, int dx, int dy) {
   while(i < word_count && starts_with(buffer, wordlist[i])) {
     if(word_fits(wordlist[i], x, y, dx, dy)) {
       for(int j = 0; j < N; j++) {
-	if(square[x+dx*j][y+dy*j] == '.') {
+	if(square[x + dx * j][y + dy * j] == '.') {
 	  possible[j] |= 1 << (wordlist[i][j] - 'a');
 	}
       }
@@ -201,14 +209,11 @@ int update_one_remain(int x, int y, int dx, int dy) {
     i++;
   }
   for(int j = 0; j < N; j++) {
-    int xx = x+dx*j, yy = y+dy*j;
+    int xx = x + dx * j, yy = y + dy * j;
     if(square[xx][yy] == '.') {
       uint new_remain = possible[j] & remain[xx][yy];
       if(new_remain == 0) {
-	if(++remain_cutoffs == remain_goal) {
-	  printf("Remain cutoffs for %c: %lu\n", first, remain_cutoffs);
-	  remain_goal += remain_update;
-	}
+        remain_cutoffs++;
 	return 1;
       }
       if(new_remain != remain[xx][yy]) {
@@ -218,10 +223,10 @@ int update_one_remain(int x, int y, int dx, int dy) {
 	undo_push(yy);
 	undo_push(UNDO_REMAIN);
 	if(dx == 0) {
-	  to_check[2*yy+1] = 1;
+	  to_check[2 * yy + 1] = 1;
 	}
 	else {
-	  to_check[2*xx] = 1;
+	  to_check[2 * xx] = 1;
 	}
       }
     }
@@ -230,23 +235,18 @@ int update_one_remain(int x, int y, int dx, int dy) {
 }
 
 /* Perform consistency propagation throughout the entire square until convergence. */
-int update_all_remains() {
+int update_all_remains(int level) {
   int result;
   while(1) {
-    int v = 0;
-    while(v < 2*N) {
+    /* First level that needs checking. */
+    int v = level;
+    while(v < 2 * N) {
       if(to_check[v]) { break; }
       v++;
     }
-    if(v == 2*N) { return 1; }
+    if(v == 2 * N) { return 1; }
     to_check[v] = 0;
-    if(v & 1) {
-      result = update_one_remain(0, v/2, 1, 0);
-    }
-    else {
-      result = update_one_remain(v/2, 0, 0, 1);
-    }
-    if(result) { return 0; }
+    if(v & 1 ? update_one_remain(0, v / 2, 1, 0) : update_one_remain(v / 2, 0, 0, 1)) { return 0; }
   }
   return 1;
 }
@@ -256,12 +256,12 @@ int update_all_remains() {
 int verify_prefixes(int level) {
   char buffer[N+1];
   int x, y, dx, dy;
-  for(int v = level/2; v < 2*N; v++) {
+  for(int v = level / 2; v < 2 * N; v++) {
     if(v & 1) {
-      x = 0; y = v/2; dx = 1; dy = 0;
+      x = 0; y = v / 2; dx = 1; dy = 0;
     }
     else {
-      x = v/2; y = 0; dx = 0; dy = 1;
+      x = v / 2; y = 0; dx = 0; dy = 1;
     }
     find_prefix(buffer, x, y, dx, dy);
     int i = bisect_left(buffer);
@@ -269,6 +269,7 @@ int verify_prefixes(int level) {
       return 0;
     }
   }
+  // At least one words exists with the given prefix.
   return 1;
 }
 
@@ -292,37 +293,36 @@ void unroll_choices() {
 
 /* Recursive backtracking algorithm to fill in the double word square. */
 void fill_square(int level) {
-  char buffer[N+1];
-  char first_row[N+1];
-  if(level == 2*N) {
+  if(level == 2 * N) { // The grid is complete and ready to be printed out.
     print_square();
-    if(EXIT_AFTER_FIRST) {
-      exit(0);
-    }
     return;
   }
   int x, y, dx, dy;
-  if(level & 1) { // Fill in a vertical column at this level of recursion.
-    x = 0; y = level/2; dx = 1; dy = 0;
+  if(level % 2 == 1) { // Fill in a vertical column at this level of recursion.
+    x = 0; y = level / 2; dx = 1; dy = 0;
   }
   else { // Fill in a horizontal row at this level of recursion.
-    x = level/2; y = 0; dx = 0; dy = 1;
+    x = level / 2; y = 0; dx = 0; dy = 1;
   }
-  if(level == 1) {
-    find_prefix(first_row, 0, 0, 0, 1);
-  }
-  find_prefix(buffer, x, y, dx, dy);
-  int i = bisect_left(buffer);
-  while(i < word_count && starts_with(buffer, wordlist[i])) {
+  find_prefix(word_buffer[level], x, y, dx, dy);
+  int i = bisect_left(word_buffer[level]);
+  while(i < word_count && (level != 1 || i < first_idx) && starts_with(word_buffer[level], wordlist[i])) {
     if(!taken[i] && word_fits(wordlist[i], x, y, dx, dy)) {
-      if(level == 1 && strcmp(wordlist[i], first_row) > 0) { break; }
+      if(level == 0) {
+        first_idx = i;
+        if(wordlist[i][first_len] != prev_char) {
+          prev_char = wordlist[i][first_len];
+          printf("Moving to %s with %ld remain cutoffs\n", wordlist[i], remain_cutoffs);
+        }
+      }
       for(int j = 0; j < 2*N; j++) { to_check[j] = 0; }
       undo_push(UNDO_DONE);
       place_word(wordlist[i], x, y, dx, dy);
+      
       if(
-	 (level != 4 || verify_prefixes(4)) &&
+         (level != 4 || verify_prefixes(4)) &&
 	 (level != 3 || verify_prefixes(3)) &&
-	 (level < 4 || update_all_remains())
+	 (level < 4 || update_all_remains(level + 1))
       ) {
 	taken[i] = 1;
 	fill_square(level + 1);
@@ -336,7 +336,7 @@ void fill_square(int level) {
 
 /* Main driver of the backtracking algorithm. */
 int main(int argc, char** argv) {
-  remain_goal = remain_update;
+int y = 0;
   read_wordlist();
   undo = malloc(sizeof(uint) * undo_capacity);
   to_check = calloc(3*N, sizeof(uint));
@@ -347,10 +347,16 @@ int main(int argc, char** argv) {
     }
   }
   if(argc > 1) {
-    first = square[0][0] = argv[1][0];
+    first_len = strlen(argv[1]);
+    first = malloc(first_len + 1);
+    strcpy(first, argv[1]);
+    while(argv[1][y] != '\0') {
+      square[0][y] = argv[1][y];
+      y++;
+    }
   }
   fill_square(0);
-  printf("All done!\n");
+  printf("All done with %s!\n", first);
 
   /* So that Valgrind won't complain about memory leaks. */
   free(undo);
