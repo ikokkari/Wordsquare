@@ -1,6 +1,6 @@
 /*
-Author: Ilkka Kokkarinen
-Date: July 29, 2024
+Author: Ilkka Kokkarinen, ilkka.kokkarinen@gmail.com
+Date: Aug 2, 2024
 GitHub: https://github.com/ikokkari/Wordsquare
 */
 
@@ -14,6 +14,9 @@ GitHub: https://github.com/ikokkari/Wordsquare
 
 /* Maximum size of wordlist */
 #define MAXWORDS 100000
+
+/* Whether to output moving progress. */
+#define VERBOSE 1
 
 /* Opcodes for operations in undo stack */
 #define UNDO_DONE 0
@@ -34,7 +37,7 @@ char square[N][N];
 /* The words chosen so far. */
 char word_buffer[2 * N][N + 1];
 
-/* The undo stack used to store the operations that restore previous state in backtracking. */
+/* The undo stack used to store the operations to restore previous state in backtracking. */
 uint* undo;
 int undo_top = 0;
 int undo_capacity = 100;
@@ -50,14 +53,15 @@ int word_count = 0;
 char wordlist[MAXWORDS][N + 1];
 
 /* The start of the words to try in the first row. */
-char* first = "[none]";
+char* first = "";
 uint first_len = 0;
+uint first_idx = 0;
 
 /* Keep track of the previous character change. */
 char prev_char = '$';
 
 /* Index to wordlist of the word on the first row. */
-uint first_idx = 0;
+uint first_row_idx = 0;
 
 /* Bookkeeping statistics for effectiveness of remain pruning. */
 long remain_cutoffs = 0;
@@ -77,7 +81,9 @@ void read_wordlist() {
     }
   }
   fclose(file);
-  printf("Read a total of %d words.\n", word_count);
+  if(VERBOSE) {
+    printf("Read a total of %d words of length %d.\n", word_count, N);
+  }
   taken = calloc(word_count, sizeof(uint));
 }
 
@@ -111,10 +117,10 @@ void place_word(char* word, int x, int y, int dx, int dy) {
       undo_push(UNDO_PLACE);
       if(remain[x][y] != 1 << (word[j] - 'a')) {
 	if(dx == 0) {
-	  to_check[2*y+1] = 1;
+	  to_check[2 * y + 1] = 1;
 	}
 	else {
-	  to_check[2*x] = 1;
+	  to_check[2 * x] = 1;
 	}
       }
     }
@@ -161,7 +167,8 @@ void find_prefix(char* buffer, int x, int y, int dx, int dy) {
 /* Binary search algorithm to find the position of the first word that starts with 
    the given prefix. */ 
 int bisect_left(char* prefix) {
-  if(strcmp(wordlist[word_count-1], prefix) < 0) {
+  /* Prefix is after the last word in the wordlist. */
+  if(strcmp(wordlist[word_count - 1], prefix) < 0) {
     return word_count;
   }
   int lo = 0, hi = word_count;
@@ -244,7 +251,7 @@ int update_all_remains(int level) {
       if(to_check[v]) { break; }
       v++;
     }
-    if(v == 2 * N) { return 1; }
+    if(v == 2 * N) { return 1; } /* All done with checking. */
     to_check[v] = 0;
     if(v & 1 ? update_one_remain(0, v / 2, 1, 0) : update_one_remain(v / 2, 0, 0, 1)) { return 0; }
   }
@@ -269,7 +276,7 @@ int verify_prefixes(int level) {
       return 0;
     }
   }
-  // At least one words exists with the given prefix.
+  /* At least one words exists with the given prefix. */
   return 1;
 }
 
@@ -293,32 +300,33 @@ void unroll_choices() {
 
 /* Recursive backtracking algorithm to fill in the double word square. */
 void fill_square(int level) {
-  if(level == 2 * N) { // The grid is complete and ready to be printed out.
+  if(level == 2 * N) { /* The grid is complete and ready to be printed out. */
     print_square();
     return;
   }
   int x, y, dx, dy;
-  if(level % 2 == 1) { // Fill in a vertical column at this level of recursion.
+  if(level & 1) { /* Fill in a vertical column at this level of recursion. */
     x = 0; y = level / 2; dx = 1; dy = 0;
   }
-  else { // Fill in a horizontal row at this level of recursion.
+  else { /* Fill in a horizontal row at this level of recursion. */
     x = level / 2; y = 0; dx = 0; dy = 1;
   }
   find_prefix(word_buffer[level], x, y, dx, dy);
-  int i = bisect_left(word_buffer[level]);
-  while(i < word_count && (level != 1 || i < first_idx) && starts_with(word_buffer[level], wordlist[i])) {
+  int i = level == 0? first_idx : bisect_left(word_buffer[level]);
+  while(i < word_count && (level != 1 || i < first_row_idx) && starts_with(word_buffer[level], wordlist[i])) {
     if(!taken[i] && word_fits(wordlist[i], x, y, dx, dy)) {
       if(level == 0) {
-        first_idx = i;
-        if(wordlist[i][first_len] != prev_char) {
-          prev_char = wordlist[i][first_len];
-          printf("Moving to %s with %ld remain cutoffs\n", wordlist[i], remain_cutoffs);
+        first_row_idx = i;
+        if(wordlist[i][first_len + 1] != prev_char) {
+          prev_char = wordlist[i][first_len + 1];
+          if(VERBOSE) {
+            printf("Moving to %s with %ld remain cutoffs.\n", wordlist[i], remain_cutoffs);
+          }
         }
       }
-      for(int j = 0; j < 2*N; j++) { to_check[j] = 0; }
+      for(int j = 0; j < 2 * N; j++) { to_check[j] = 0; }
       undo_push(UNDO_DONE);
       place_word(wordlist[i], x, y, dx, dy);
-      
       if(
          (level != 4 || verify_prefixes(4)) &&
 	 (level != 3 || verify_prefixes(3)) &&
@@ -339,22 +347,22 @@ int main(int argc, char** argv) {
 int y = 0;
   read_wordlist();
   undo = malloc(sizeof(uint) * undo_capacity);
-  to_check = calloc(3*N, sizeof(uint));
+  to_check = calloc(3 * N, sizeof(uint));
   for(int x = 0; x < N; x++) {
     for(int y = 0; y < N; y++) {
-      remain[x][y] = 0x3FFFFFF; // Integer with the lowest 26 bits on
-      square[x][y] = '.'; // Grid is initially all empty
+      remain[x][y] = 0x3FFFFFF; /* Integer with the lowest 26 bits on */
+      square[x][y] = '.'; /* Grid is initially all empty */
     }
   }
+  /* Place the prefix on the first row. */
   if(argc > 1) {
     first_len = strlen(argv[1]);
     first = malloc(first_len + 1);
     strcpy(first, argv[1]);
-    while(argv[1][y] != '\0') {
-      square[0][y] = argv[1][y];
-      y++;
-    }
+    first_idx = bisect_left(first);
   }
+
+  /* Do the watussi, Johnny */
   fill_square(0);
   printf("All done with %s!\n", first);
 
