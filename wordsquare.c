@@ -57,9 +57,6 @@ char* first = "";
 uint first_len = 0;
 uint first_idx = 0;
 
-/* Keep track of the previous character change. */
-char prev_char = '$';
-
 /* Index to wordlist of the word on the first row. */
 uint first_row_idx = 0;
 
@@ -317,12 +314,6 @@ void fill_square(int level) {
     if(!taken[i] && word_fits(wordlist[i], x, y, dx, dy)) {
       if(level == 0) {
         first_row_idx = i;
-        if(wordlist[i][first_len + 1] != prev_char) {
-          prev_char = wordlist[i][first_len + 1];
-          if(VERBOSE) {
-            printf("Moving to %s with %ld remain cutoffs.\n", wordlist[i], remain_cutoffs);
-          }
-        }
       }
       for(int j = 0; j < 2 * N; j++) { to_check[j] = 0; }
       undo_push(UNDO_DONE);
