@@ -13,12 +13,12 @@ GitHub: https://github.com/ikokkari/Wordsquare
 #define VERBOSE 1
 
 /* Size of grid square */
-#define N 6
+#define N 9
 
-/* Maximum size of wordlist */
+/* Maximum size of wordlist. */
 #define MAXWORDS 100000
 
-/* Opcodes for operations in undo stack */
+/* Opcodes for operations in undo stack. */
 #define UNDO_DONE 0
 #define UNDO_PLACE 1
 #define UNDO_REMAIN 2
@@ -92,7 +92,7 @@ void print_square() {
     }
     printf("\n");
   }
-  printf("\n");
+  printf("\n\n");
 }
 
 /* Push an item into the undo stack, expanding the stack space if needed. */
@@ -273,7 +273,7 @@ int verify_prefixes(int level) {
       return 0;
     }
   }
-  /* At least one words exists with the given prefix. */
+  /* At least one word exists with the given prefix. */
   return 1;
 }
 
@@ -344,8 +344,8 @@ int y = 0;
   to_check = calloc(3 * N, sizeof(uint));
   for(int x = 0; x < N; x++) {
     for(int y = 0; y < N; y++) {
-      remain[x][y] = 0x3FFFFFF; /* Integer with the lowest 26 bits on */
-      square[x][y] = '.'; /* Grid is initially all empty */
+      remain[x][y] = 0x3FFFFFF; /* Integer with the lowest 26 bits on. */
+      square[x][y] = '.'; /* Grid is initially all empty. */
     }
   }
   /* Place the prefix on the first row. */
@@ -358,7 +358,6 @@ int y = 0;
 
   /* Do the watussi, Johnny */
   fill_square(0);
-  printf("All done with %s!\n", first);
 
   /* So that Valgrind won't complain about memory leaks. */
   free(undo);
