@@ -315,7 +315,7 @@ void fill_square(int level) {
       if(level == 0) {
         first_row_idx = i;
         if(VERBOSE) {
-          printf("\x1b[AMoving to first word %s.\n", wordlist[i]);
+          printf("\x1b[AMoving to first word %s with %ld remain cutoffs.\n", wordlist[i], remain_cutoffs);
         }
       }
       for(int j = 0; j < 2 * N; j++) { to_check[j] = 0; }
