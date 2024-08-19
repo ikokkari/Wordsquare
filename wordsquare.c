@@ -25,6 +25,7 @@ GitHub: https://github.com/ikokkari/Wordsquare
 
 /* We don't need negative numbers for anything in this program. */
 typedef unsigned int uint;
+typedef unsigned long ulong;
 
 /* Two-letter prefixes that exist in words. */
 uint prefixes[26][26];
@@ -64,7 +65,9 @@ uint first_idx = 0;
 uint first_row_idx = 0;
 
 /* Bookkeeping statistics for effectiveness of remain pruning. */
-long remain_cutoffs = 0;
+ulong remain_cutoffs = 0;
+ulong prefix_cutoffs = 0;
+int max_level = 0;
 
 /* Read the list of words from the file words_sorted.txt, keeping the words of length N. */
 void read_wordlist() {
@@ -272,6 +275,7 @@ int update_all_remains(int level) {
 int verify_col_prefixes() {
   for(int j = 1; j < N; j++) {
     if(prefixes[square[0][j]-'a'][square[1][j]-'a'] == 0) {
+      prefix_cutoffs++;
       return 0;
     }
   }
@@ -282,6 +286,7 @@ int verify_col_prefixes() {
 int verify_row_prefixes() {
   for(int i = 2; i < N; i++) {
     if(prefixes[square[i][0]-'a'][square[i][1]-'a'] == 0) {
+      prefix_cutoffs++;
       return 0;
     }
   }
@@ -308,6 +313,7 @@ void unroll_choices() {
 
 /* Recursive backtracking algorithm to fill in the double word square. */
 void fill_square(int level) {
+  if(level > max_level) { max_level = level; }
   if(level == 2 * N) { /* The grid is complete and ready to be printed out. */
     print_square();
     return;
@@ -326,7 +332,8 @@ void fill_square(int level) {
       if(level == 0) {
         first_row_idx = i;
         if(VERBOSE) {
-          printf("\x1b[AMoving to word #%d %s with %ld remain cutoffs.\n", i - first_idx, wordlist[i], remain_cutoffs);
+          printf("\x1b[AMoving to word #%d '%s' after %ld remain and %ld prefix cutoffs, max level %d.\n",
+		   i - first_idx, wordlist[i], remain_cutoffs, prefix_cutoffs, max_level);
         }
       }
       for(int j = 0; j < 2 * N; j++) { to_check[j] = 0; }
