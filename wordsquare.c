@@ -308,7 +308,7 @@ uint verify_col_prefixes() {
 /* Verify that the two words on the first two columns are possible to complete into row words. */
 uint verify_row_prefixes() {
   for(uint i = 2; i < N; i++) {
-    if(two_start[square[i][0]-'a'][square[i][1]-'a'] == M) {
+    if(two_start[square[i][0] - 'a'][square[i][1] - 'a'] == M) {
       prefix_cutoffs++;
       return 0;
     }
@@ -377,6 +377,10 @@ void fill_square(uint level) {
   }
 }
 
+char* get_word(uint idx) {
+  return idx < word_count ? wordlist[idx] : "";
+}
+
 /* Main driver of the backtracking algorithm. */
 int main(int argc, char** argv) {
   uint y = 0;
@@ -403,12 +407,12 @@ int main(int argc, char** argv) {
     last_idx = bisect_left(last);
   }
 
-  printf("Starting search from %d to %d.\n", first_idx, last_idx);
+  printf("Starting search from %s to %s.\n\n", get_word(first_idx), get_word(last_idx));
   
   /* Do the watussi, Johnny */
   fill_square(0);
 
-  printf("Ending search from %d to %d.\n", first_idx, last_idx);
+  printf("Ending search from %s to %s.\n\n", get_word(first_idx), get_word(last_idx));
   
   /* So that Valgrind won't complain about memory leaks. */
   free(undo);
