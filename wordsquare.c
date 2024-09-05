@@ -1,6 +1,6 @@
 /*
 Author: Ilkka Kokkarinen, ilkka.kokkarinen@gmail.com
-Date: Sep 4, 2024
+Date: Sep 5, 2024
 GitHub: https://github.com/ikokkari/Wordsquare
 */
 
@@ -39,7 +39,7 @@ uint one_start[26];
 /* Starting position of each two character prefix in the wordlist. */
 uint two_start[26][26];
 
-/* How many words start with given two character prefix. */
+/* How many words start with each two character prefix. */
 uint two_count[26][26];
 
 /* For each cell of the square, the characters that are still possible for that cell,
@@ -388,7 +388,7 @@ void fill_square(uint level) {
       if(
          (level != 2 || verify_col_prefixes()) &&
 	 (level != 3 || verify_row_prefixes()) &&
-	 (level < 4 || update_all_remains(level + 1))
+	 (level != 3 || update_all_remains(level + 1))
       ) {
 	taken[i] = 1;
 	fill_square(level + 1);
