@@ -293,16 +293,6 @@ uint update_all_remains(uint level) {
     /* Find the tightest level that needs checking. */
     for(uint v = level; v < 2*N; v++) {
       if(to_check[v]) {
-	if(best_v == M) {
-	  best_v = v;
-	  if(best_v & 1) {
-	    bv = two_count[square[0][best_v / 2] - 'a'][square[1][best_v / 2] - 'a'];
-	  }
-	  else {
-	    bv = two_count[square[best_v / 2][0] - 'a'][square[best_v / 2][1] - 'a'];
-	  }
-	}
-	else {
 	  uint cv;
 	  if(v & 1) {
 	    cv = two_count[square[0][v / 2] - 'a'][square[1][v / 2] - 'a'];
@@ -312,14 +302,8 @@ uint update_all_remains(uint level) {
 	  }
 	  if(cv < bv) {
 	    best_v = v;
-	    if(best_v & 1) {
-	      bv = two_count[square[0][best_v / 2] - 'a'][square[1][best_v / 2] - 'a'];
-	    }
-	    else {
-	      bv = two_count[square[best_v / 2][0] - 'a'][square[best_v / 2][1] - 'a'];
-	    }
+	    bv = cv;
 	  }
-	}
       }
     }
     if(best_v == M) { /* All done with checking. */
