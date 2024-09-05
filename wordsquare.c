@@ -13,10 +13,10 @@ GitHub: https://github.com/ikokkari/Wordsquare
 #define M 1000000
 
 /* Output progress report about what is happening. */
-#define VERBOSE 1
+#define VERBOSE 0
 
 /* Size of grid square */
-#define N 9
+#define N 6
 
 /* Maximum size of wordlist. */
 #define MAXWORDS 100000
@@ -288,11 +288,10 @@ uint update_one_remain(uint x, uint y, uint dx, uint dy) {
 /* Perform consistency propagation throughout the entire square until convergence. */
 uint update_all_remains(uint level) {
   while(1) {
-    /* Find the tightest level that needs checking. */
-    uint v = level;
     uint best_v = M; /* Tightest level found so far. */
     uint bv = M; /* Number of possible words starting with tightest prefix. */
-    while(v < 2 * N) {
+    /* Find the tightest level that needs checking. */
+    for(uint v = level; v < 2*N; v++) {
       if(to_check[v]) {
 	if(best_v == M) {
 	  best_v = v;
@@ -313,10 +312,15 @@ uint update_all_remains(uint level) {
 	  }
 	  if(cv < bv) {
 	    best_v = v;
+	    if(best_v & 1) {
+	      bv = two_count[square[0][best_v / 2] - 'a'][square[1][best_v / 2] - 'a'];
+	    }
+	    else {
+	      bv = two_count[square[best_v / 2][0] - 'a'][square[best_v / 2][1] - 'a'];
+	    }
 	  }
 	}
       }
-      v++;
     }
     if(best_v == M) { /* All done with checking. */
       return 1;
