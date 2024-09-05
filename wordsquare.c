@@ -13,7 +13,7 @@ GitHub: https://github.com/ikokkari/Wordsquare
 #define M 1000000
 
 /* Output progress report about what is happening. */
-#define VERBOSE 1
+#define VERBOSE 0
 
 /* Size of grid square */
 #define N 6
@@ -38,6 +38,9 @@ uint one_start[26];
 
 /* Starting position of each two character prefix in the wordlist. */
 uint two_start[26][26];
+
+/* How many words start with given two character prefix. */
+uint two_count[26][26];
 
 /* For each cell of the square, the characters that are still possible for that cell,
    encoded as a bit vector in the lowest 26 bits of the unsigned integer. */
@@ -87,6 +90,7 @@ void read_wordlist() {
     one_start[i] = M;
     for(uint j = 0; j < 26; j++) {
       two_start[i][j] = M;
+      two_count[i][j] = 0;
     }
   }
   char buffer[100];
@@ -99,11 +103,15 @@ void read_wordlist() {
     buffer[j] = '\0';
     if(j == N) {
       strcpy(wordlist[word_count], buffer);
-      if(one_start[buffer[0] - 'a'] > word_count) {
+      if(one_start[buffer[0] - 'a'] == M) {
 	one_start[buffer[0] - 'a'] = word_count;
       }
-      if(two_start[buffer[0] - 'a'][buffer[1] - 'a'] > word_count) {
+      if(two_start[buffer[0] - 'a'][buffer[1] - 'a'] == M) {
 	two_start[buffer[0] - 'a'][buffer[1] - 'a'] = word_count;
+	two_count[buffer[0] - 'a'][buffer[1] - 'a'] = 1;
+      }
+      else {
+	two_count[buffer[0] - 'a'][buffer[1] - 'a']++;
       }
       word_count++;
     }
@@ -279,17 +287,44 @@ uint update_one_remain(uint x, uint y, uint dx, uint dy) {
 
 /* Perform consistency propagation throughout the entire square until convergence. */
 uint update_all_remains(uint level) {
-  uint result;
   while(1) {
-    /* First level that needs checking. */
+    /* Find the tightest level that needs checking. */
     uint v = level;
+    uint best_v = M;
+    uint bv = 0;
     while(v < 2 * N) {
-      if(to_check[v]) { break; }
+      if(to_check[v]) {
+	if(best_v == M) {
+	  best_v = v;
+	  if(best_v & 1) {
+	    bv = two_count[square[0][best_v / 2] - 'a'][square[1][best_v / 2] - 'a'];
+	  }
+	  else {
+	    bv = two_count[square[best_v / 2][0] - 'a'][square[best_v / 2][1] - 'a'];
+	  }
+	}
+	else {
+	  uint cv;
+	  if(v & 1) {
+	    cv = two_count[square[0][v / 2] - 'a'][square[1][v / 2] - 'a'];
+	  }
+	  else {
+	    cv = two_count[square[v / 2][0] - 'a'][square[v / 2][1] - 'a'];
+	  }
+	  if(cv < bv) {
+	    best_v = v;
+	  }
+	}
+      }
       v++;
     }
-    if(v == 2 * N) { return 1; } /* All done with checking. */
-    to_check[v] = 0;
-    if(v & 1 ? update_one_remain(0, v / 2, 1, 0) : update_one_remain(v / 2, 0, 0, 1)) { return 0; }
+    if(best_v == M) { /* All done with checking. */
+      return 1;
+    } 
+    to_check[best_v] = 0;
+    if(best_v & 1 ? update_one_remain(0, best_v / 2, 1, 0) : update_one_remain(best_v / 2, 0, 0, 1)) {
+      return 0;
+    }
   }
   return 1;
 }
@@ -355,8 +390,8 @@ void fill_square(uint level) {
       if(level == 0) {
         first_row_idx = i;
         if(VERBOSE) {
-          printf("\x1b[AMoving to word #%d '%s' after %ld remain and %ld prefix cutoffs, max level %d.\n",
-		   i - first_idx, wordlist[i], remain_cutoffs, prefix_cutoffs, max_level);
+          printf("\x1b[AMoving to word #%d '%s' (%ldMR and %ldMP), max level %d.\n",
+		   i - first_idx, wordlist[i], remain_cutoffs / 1000000, prefix_cutoffs / 1000000, max_level);
         }
       }
       for(uint j = 0; j < 2 * N; j++) { to_check[j] = 0; }
@@ -383,7 +418,6 @@ char* get_word(uint idx) {
 
 /* Main driver of the backtracking algorithm. */
 int main(int argc, char** argv) {
-  uint y = 0;
   read_wordlist();
   undo = malloc(sizeof(uint) * undo_capacity);
   to_check = calloc(3 * N, sizeof(uint));
