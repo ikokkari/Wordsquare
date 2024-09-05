@@ -1,6 +1,6 @@
 /*
 Author: Ilkka Kokkarinen, ilkka.kokkarinen@gmail.com
-Date: Aug 25, 2024
+Date: Sep 4, 2024
 GitHub: https://github.com/ikokkari/Wordsquare
 */
 
