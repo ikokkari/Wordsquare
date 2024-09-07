@@ -1,6 +1,6 @@
 /*
 Author: Ilkka Kokkarinen, ilkka.kokkarinen@gmail.com
-Date: Sep 5, 2024
+Date: Sep 6, 2024
 GitHub: https://github.com/ikokkari/Wordsquare
 */
 
@@ -8,12 +8,16 @@ GitHub: https://github.com/ikokkari/Wordsquare
 #include "stdlib.h"
 #include "string.h"
 #include "assert.h"
+#include "limits.h"
 
-/* Big number to mean "none" */
-#define M 1000000
+/* Big number to mean "none". */
+#define M UINT_MAX
 
 /* Output progress report about what is happening. */
 #define VERBOSE 0
+
+/* Level at which an intermediate grid is printed. */
+#define PROGRESS 42
 
 /* Size of grid square */
 #define N 6
@@ -29,9 +33,6 @@ GitHub: https://github.com/ikokkari/Wordsquare
 /* We don't need negative numbers for anything in this program. */
 typedef unsigned int uint;
 typedef unsigned long ulong;
-
-/* Two-letter prefixes that exist in words. */
-uint prefixes[26][26];
 
 /* Starting positions of each one character prefix in the wordlist. */
 uint one_start[26];
@@ -108,17 +109,15 @@ void read_wordlist() {
       }
       if(two_start[buffer[0] - 'a'][buffer[1] - 'a'] == M) {
 	two_start[buffer[0] - 'a'][buffer[1] - 'a'] = word_count;
-	two_count[buffer[0] - 'a'][buffer[1] - 'a'] = 1;
       }
-      else {
-	two_count[buffer[0] - 'a'][buffer[1] - 'a']++;
-      }
+      two_count[buffer[0] - 'a'][buffer[1] - 'a']++;
       word_count++;
     }
   }
   fclose(file);
   taken = calloc(word_count, sizeof(uint));
   last_idx = word_count;
+  printf("Finished reading wordlist of %d words.\n", word_count);
 }
 
 /* Print the contents of the current square. */
@@ -184,17 +183,12 @@ uint word_fits(char* word, uint x, uint y, uint dx, uint dy) {
    into direction (dx, dy). */
 void find_prefix(char* buffer, uint x, uint y, uint dx, uint dy) {
   uint i = 0;
-  while(i < N) {
-    if(square[x][y] != '.') {
-      buffer[i++] = square[x][y];
-      x += dx;
-      y += dy;
-    }
-    else {
-      break;
-    }
+  while(i < N && square[x][y] != '.') {
+    buffer[i++] = square[x][y];
+    x += dx;
+    y += dy;
   }
-  buffer[i] = '\0';
+  buffer[i] = '\0'; /* Don't forget to put the NUL character in the end... */
   return;
 }
 
@@ -241,32 +235,37 @@ uint starts_with(char* first, char* second) {
 /* Update the remaining characters table for the row or column that starts at (x, y)
    and goes in direction (dx, dy). Returns 1 if dead end reached, 0 otherwise. */
 uint update_one_remain(uint x, uint y, uint dx, uint dy) {
-  uint possible[N];
+  uint possible[N]; /* Letters that are possible for each position. */
   char buffer[N + 1];
   for(uint j = 0; j < N; j++) { possible[j] = 0; }
+  
   find_prefix(buffer, x, y, dx, dy);
   uint i = bisect_left(buffer);
-  if(i >= word_count || !starts_with(buffer, wordlist[i])) {
-    return 1;
-  }
+
+  /* Go through the words that start with the prefix of the current row or column. */
   while(i < word_count && starts_with(buffer, wordlist[i])) {
     if(word_fits(wordlist[i], x, y, dx, dy)) {
       for(uint j = 0; j < N; j++) {
 	if(square[x + dx * j][y + dy * j] == '.') {
+	  /* This character is now possible in this position. */
 	  possible[j] |= 1 << (wordlist[i][j] - 'a');
 	}
       }
     }
     i++;
   }
+
+  /* Update the remain character set for the positions in the current row or column. */
   for(uint j = 0; j < N; j++) {
     uint xx = x + dx * j, yy = y + dy * j;
     if(square[xx][yy] == '.') {
       uint new_remain = possible[j] & remain[xx][yy];
-      if(new_remain == 0) {
+      /* If no character is possible in this position, dead end. */
+      if(new_remain == 0) { 
         remain_cutoffs++;
 	return 1;
       }
+      /* If the set of remaining characters has decreased, for the opposite row/column to be checked. */
       if(new_remain != remain[xx][yy]) {
 	undo_push(remain[xx][yy]);
 	remain[xx][yy] = new_remain;
@@ -300,7 +299,7 @@ uint update_all_remains(uint level) {
 	  else {
 	    cv = two_count[square[v / 2][0] - 'a'][square[v / 2][1] - 'a'];
 	  }
-	  if(cv < bv) {
+	  if(cv < bv) { /* We found the tighter level than the previous tightest one. */
 	    best_v = v;
 	    bv = cv;
 	  }
@@ -308,7 +307,8 @@ uint update_all_remains(uint level) {
     }
     if(best_v == M) { /* All done with checking. */
       return 1;
-    } 
+    }
+    /* Update the remain sets for the chosen tightest row or column. */
     to_check[best_v] = 0;
     if(best_v & 1 ? update_one_remain(0, best_v / 2, 1, 0) : update_one_remain(best_v / 2, 0, 0, 1)) {
       return 0;
@@ -360,8 +360,10 @@ void unroll_choices() {
 /* Recursive backtracking algorithm to fill in the double word square. */
 void fill_square(uint level) {
   if(level > max_level) { max_level = level; }
-  if(level == 2 * N) { /* The grid is complete and ready to be printed out. */
+  if(level == PROGRESS || level == 2 * N) {
     print_square();
+  }
+  if(level == 2 * N) { /* The grid is complete and ready to be printed out. */
     return;
   }
   uint x, y, dx, dy;
@@ -400,6 +402,7 @@ void fill_square(uint level) {
   }
 }
 
+/* Returns the word from the given position of the wordlist, or the empty string for positions outside the list. */
 char* get_word(uint idx) {
   return idx < word_count ? wordlist[idx] : "";
 }
