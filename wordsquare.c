@@ -131,8 +131,9 @@ void print_square() {
   printf("\n\n");
 }
 
-/* Push an item into the undo stack, expanding the stack space if needed. */
+/* Push an item into the undo stack. */
 void undo_push(uint item) {
+  /* Expand the stack size if needed. */
   if(undo_top == undo_capacity) {
     undo_capacity *= 2;
     undo = realloc(undo, undo_capacity * sizeof(uint));
@@ -341,19 +342,18 @@ uint verify_row_prefixes() {
 
 /* Pop and execute instructions from the undo stack to restore previous state in backtracking. */
 void unroll_choices() {
-  uint item = undo[--undo_top];
-  while(item != UNDO_DONE) {
-    if(item == UNDO_PLACE) {
+  uint item;
+  while((item = undo[--undo_top]) != UNDO_DONE) {
+    if(item == UNDO_PLACE) { /* Undo placing a letter into the grid. */
       uint y = undo[--undo_top];
       uint x = undo[--undo_top];
       square[x][y] = '.';
     }
-    else if(item == UNDO_REMAIN) {
+    else if(item == UNDO_REMAIN) { /* Undo decreasing the size of remain set. */
       uint y = undo[--undo_top];
       uint x = undo[--undo_top];
       remain[x][y] = undo[--undo_top];
     }
-    item = undo[--undo_top];
   }
 }
 
@@ -432,7 +432,8 @@ int main(int argc, char** argv) {
     last_idx = bisect_left(last);
   }
 
-  printf("Starting search from %s to %s.\n\n", get_word(first_idx), get_word(last_idx));
+  printf("Starting search from %s (#%d) to %s (#%d).\n\n",
+	 get_word(first_idx), first_idx, get_word(last_idx), last_idx);
   
   /* Do the watussi, Johnny */
   fill_square(0);
