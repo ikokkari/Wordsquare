@@ -9,8 +9,8 @@ You can compile `wordsquare.c` with your favourite C compiler. You should first 
 ./wordsquare prefix_start prefix_end
 ```
 
-where `prefix_start` is the prefix of the word in the first row of the grid where the program will start searching for double word squares, and `prefix_end` is the prefix where the search stops. If you have extra processor cycles available, set this prefix to something and let it run. Perhaps you will become the first person to discover a valid 9-by-9 double word square.
+where `prefix_start` is the prefix of the word in the first row of the grid where the program will start searching for double word squares, and `prefix_end` is the prefix where the search stops.
 
-Both programs use backtracking search that fills the grid alternating between filling the next word in the next row and column, aided with forward checking for the unfilled cells in the remaining grid, plus some other small optimizations. They will iterate through all possible word squares in alphabetical order of the word in the first row. Since double word squares are symmetric anyway, the word in the first column is constrained to be lexicographically smaller than the word in the first row, even as it starts with the same letter.
+The program uses backtracking search that fills the grid alternating between filling rows and columns, aided with constraint propagation for the unfilled cells in the remaining grid, plus some other small optimizations. The program generates all possible word squares in alphabetical order of the word in the first row. Since double word squares are symmetric anyway, the word in the first column is constrained to be lexicographically smaller than the word in the first row, even as it starts with the same letter.
 
 The source code for `wordsquare.c` is released under the GPL v3 licence. Wordlist `words_sorted.txt` adapted from [dwyl/english-words](https://github.com/dwyl/english-words).
