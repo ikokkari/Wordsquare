@@ -1,6 +1,6 @@
 /*
 Author: Ilkka Kokkarinen, ilkka.kokkarinen@gmail.com
-Date: Sep 6, 2024
+Date: Sep 7, 2024
 GitHub: https://github.com/ikokkari/Wordsquare
 */
 
@@ -34,14 +34,21 @@ GitHub: https://github.com/ikokkari/Wordsquare
 typedef unsigned int uint;
 typedef unsigned long ulong;
 
+/* Convert a letter character to an integer code. */
+#define ENC(c) (c - 'a')
+
+/* Size of alphabet, and the corresponding remain set mask. */
+#define ALPHABET 26
+#define ALPHA_MASK 0x3FFFFFF
+
 /* Starting positions of each one character prefix in the wordlist. */
-uint one_start[26];
+uint one_start[ALPHABET];
 
 /* Starting position of each two character prefix in the wordlist. */
-uint two_start[26][26];
+uint two_start[ALPHABET][ALPHABET];
 
 /* How many words start with each two character prefix. */
-uint two_count[26][26];
+uint two_count[ALPHABET][ALPHABET];
 
 /* For each cell of the square, the characters that are still possible for that cell,
    encoded as a bit vector in the lowest 26 bits of the unsigned integer. */
@@ -87,9 +94,9 @@ uint max_level = 0;
 
 /* Read the list of words from the file words_sorted.txt, keeping the words of length N. */
 void read_wordlist() {
-  for(uint i = 0; i < 26; i++) {
+  for(uint i = 0; i < ALPHABET; i++) {
     one_start[i] = M;
-    for(uint j = 0; j < 26; j++) {
+    for(uint j = 0; j < ALPHABET; j++) {
       two_start[i][j] = M;
       two_count[i][j] = 0;
     }
@@ -104,20 +111,22 @@ void read_wordlist() {
     buffer[j] = '\0';
     if(j == N) {
       strcpy(wordlist[word_count], buffer);
-      if(one_start[buffer[0] - 'a'] == M) {
-	one_start[buffer[0] - 'a'] = word_count;
+      if(one_start[ENC(buffer[0])] == M) {
+	one_start[ENC(buffer[0])] = word_count;
       }
-      if(two_start[buffer[0] - 'a'][buffer[1] - 'a'] == M) {
-	two_start[buffer[0] - 'a'][buffer[1] - 'a'] = word_count;
+      if(two_start[ENC(buffer[0])][ENC(buffer[1])] == M) {
+	two_start[ENC(buffer[0])][ENC(buffer[1])] = word_count;
       }
-      two_count[buffer[0] - 'a'][buffer[1] - 'a']++;
+      two_count[ENC(buffer[0])][ENC(buffer[1])]++;
       word_count++;
     }
   }
   fclose(file);
   taken = calloc(word_count, sizeof(uint));
   last_idx = word_count;
-  printf("Finished reading wordlist of %d words.\n", word_count);
+  if(VERBOSE) {
+    printf("Finished reading wordlist of %d words.\n", word_count);
+  }
 }
 
 /* Print the contents of the current square. */
@@ -149,7 +158,7 @@ void place_word(char* word, uint x, uint y, uint dx, uint dy) {
       undo_push(x);
       undo_push(y);
       undo_push(UNDO_PLACE);
-      if(remain[x][y] != 1 << (word[j] - 'a')) {
+      if(remain[x][y] != 1 << (ENC(word[j]))) {
 	if(dx == 0) {
 	  to_check[2 * y + 1] = 1;
 	}
@@ -171,7 +180,7 @@ uint word_fits(char* word, uint x, uint y, uint dx, uint dy) {
     if(square[x][y] != '.' && square[x][y] != ch) {
       return 0;
     }
-    if(square[x][y] == '.' && (remain[x][y] & (1 << (ch - 'a'))) == 0) {
+    if(square[x][y] == '.' && (remain[x][y] & (1 << (ENC(ch)))) == 0) {
       return 0;
     }
     x += dx;
@@ -198,10 +207,10 @@ void find_prefix(char* buffer, uint x, uint y, uint dx, uint dy) {
 uint bisect_left(char* prefix) {
   /* Look up the precomputed results for one- and two-character prefixes. */
   if(prefix[1] == '\0') {
-    return one_start[prefix[0] - 'a'];
+    return one_start[ENC(prefix[0])];
   }
   if(prefix[2] == '\0') {
-    return two_start[prefix[0] - 'a'][prefix[1] - 'a'];
+    return two_start[ENC(prefix[0])][ENC(prefix[1])];
   }
   
   /* Prefix is after the last word in the wordlist. */
@@ -249,7 +258,7 @@ uint update_one_remain(uint x, uint y, uint dx, uint dy) {
       for(uint j = 0; j < N; j++) {
 	if(square[x + dx * j][y + dy * j] == '.') {
 	  /* This character is now possible in this position. */
-	  possible[j] |= 1 << (wordlist[i][j] - 'a');
+	  possible[j] |= 1 << ENC(wordlist[i][j]);
 	}
       }
     }
@@ -266,13 +275,14 @@ uint update_one_remain(uint x, uint y, uint dx, uint dy) {
         remain_cutoffs++;
 	return 1;
       }
-      /* If the set of remaining characters has decreased, for the opposite row/column to be checked. */
+      /* If the set of remaining characters has decreased, record the change. */
       if(new_remain != remain[xx][yy]) {
 	undo_push(remain[xx][yy]);
 	remain[xx][yy] = new_remain;
 	undo_push(xx);
 	undo_push(yy);
 	undo_push(UNDO_REMAIN);
+	/* Force the corresponding row/column to be checked again. */
 	if(dx == 0) {
 	  to_check[2 * yy + 1] = 1;
 	}
@@ -295,10 +305,10 @@ uint update_all_remains(uint level) {
       if(to_check[v]) {
 	  uint cv;
 	  if(v & 1) {
-	    cv = two_count[square[0][v / 2] - 'a'][square[1][v / 2] - 'a'];
+	    cv = two_count[ENC(square[0][v / 2])][ENC(square[1][v / 2])];
 	  }
 	  else {
-	    cv = two_count[square[v / 2][0] - 'a'][square[v / 2][1] - 'a'];
+	    cv = two_count[ENC(square[v / 2][0])][ENC(square[v / 2][1])];
 	  }
 	  if(cv < bv) { /* We found the tighter level than the previous tightest one. */
 	    best_v = v;
@@ -321,7 +331,7 @@ uint update_all_remains(uint level) {
 /* Verify that the two words on the first two rows are possible to complete into column words. */  
 uint verify_col_prefixes() {
   for(uint j = 1; j < N; j++) {
-    if(two_start[square[0][j] - 'a'][square[1][j] - 'a'] == M) {
+    if(two_start[ENC(square[0][j])][ENC(square[1][j])] == M) {
       prefix_cutoffs++;
       return 0;
     }
@@ -332,7 +342,7 @@ uint verify_col_prefixes() {
 /* Verify that the two words on the first two columns are possible to complete into row words. */
 uint verify_row_prefixes() {
   for(uint i = 2; i < N; i++) {
-    if(two_start[square[i][0] - 'a'][square[i][1] - 'a'] == M) {
+    if(two_start[ENC(square[i][0])][ENC(square[i][1])] == M) {
       prefix_cutoffs++;
       return 0;
     }
@@ -414,7 +424,7 @@ int main(int argc, char** argv) {
   to_check = calloc(3 * N, sizeof(uint));
   for(uint x = 0; x < N; x++) {
     for(uint y = 0; y < N; y++) {
-      remain[x][y] = 0x3FFFFFF; /* Integer with the lowest 26 bits on. */
+      remain[x][y] = ALPHA_MASK; /* Integer with the lowest ALPHABET bits on. */
       square[x][y] = '.'; /* Grid is initially all empty. */
     }
   }
@@ -432,9 +442,11 @@ int main(int argc, char** argv) {
     last_idx = bisect_left(last);
   }
 
-  printf("Starting search from %s (#%d) to %s (#%d).\n\n",
-	 get_word(first_idx), first_idx, get_word(last_idx), last_idx);
-  
+  if(VERBOSE) {
+    printf("Starting search from %s (#%d) to %s (#%d).\n\n",
+	   get_word(first_idx), first_idx, get_word(last_idx), last_idx);
+  }
+    
   /* Do the watussi, Johnny */
   fill_square(0);
 
