@@ -1,6 +1,6 @@
 /*
 Author: Ilkka Kokkarinen, ilkka.kokkarinen@gmail.com
-Date: Sep 7, 2024
+Date: Sep 9, 2024
 GitHub: https://github.com/ikokkari/Wordsquare
 */
 
@@ -87,7 +87,7 @@ uint last_idx = 0;
 /* Index to wordlist of the word on the first row. */
 uint first_row_idx = 0;
 
-/* Bookkeeping statistics for effectiveness of remain pruning. */
+/* Bookkeeping statistics for the effectiveness of pruning. */
 ulong remain_cutoffs = 0;
 ulong prefix_cutoffs = 0;
 uint max_level = 0;
@@ -151,14 +151,17 @@ void undo_push(uint item) {
 }
 
 /* Place the word into the square starting at cell (x, y) into direction (dx, dy). */
-void place_word(char* word, uint x, uint y, uint dx, uint dy) {
+void place_word(char* word, uint x, uint y, uint dx, uint dy, int update_checks) {
+  if(update_checks) {
+    memset(to_check, 0, 2 * N);
+  }
   for(uint j = 0; j < N; j++) { 
     if(square[x][y] == '.') {
       square[x][y] = word[j];
       undo_push(x);
       undo_push(y);
       undo_push(UNDO_PLACE);
-      if(remain[x][y] != 1 << (ENC(word[j]))) {
+      if(update_checks && remain[x][y] != 1 << (ENC(word[j]))) {
 	if(dx == 0) {
 	  to_check[2 * y + 1] = 1;
 	}
@@ -172,15 +175,10 @@ void place_word(char* word, uint x, uint y, uint dx, uint dy) {
   }
 }
 
-/* Determine if the given word would fit into the square starting at cell (x, y)
-   into direction (dx, dy). */
+/* Determine if the given word would fit starting at cell (x, y) to direction (dx, dy). */
 uint word_fits(char* word, uint x, uint y, uint dx, uint dy) {
   for(uint i = 0; i < N; i++) {
-    char ch = word[i];
-    if(square[x][y] != '.' && square[x][y] != ch) {
-      return 0;
-    }
-    if(square[x][y] == '.' && (remain[x][y] & (1 << (ENC(ch)))) == 0) {
+    if(square[x][y] == '.' && (remain[x][y] & (1 << (ENC(word[i])))) == 0) {
       return 0;
     }
     x += dx;
@@ -189,8 +187,7 @@ uint word_fits(char* word, uint x, uint y, uint dx, uint dy) {
   return 1;
 }
 
-/* Find the longest contiguous prefix in the square starting from position (x, y)
-   into direction (dx, dy). */
+/* Find the character prefix in the square starting from position (x, y) to direction (dx, dy). */
 void find_prefix(char* buffer, uint x, uint y, uint dx, uint dy) {
   uint i = 0;
   while(i < N && square[x][y] != '.') {
@@ -199,11 +196,9 @@ void find_prefix(char* buffer, uint x, uint y, uint dx, uint dy) {
     y += dy;
   }
   buffer[i] = '\0'; /* Don't forget to put the NUL character in the end... */
-  return;
 }
 
-/* Binary search algorithm to find the position of the first word that starts with 
-   the given prefix. */ 
+/* Binary search to find the position of the first word that starts with the given prefix. */ 
 uint bisect_left(char* prefix) {
   /* Look up the precomputed results for one- and two-character prefixes. */
   if(prefix[1] == '\0') {
@@ -218,8 +213,8 @@ uint bisect_left(char* prefix) {
     return word_count;
   }
 
-  /* Use binary search to find the first word that starts with the given prefix. */
-  uint lo = 0, hi = word_count - 1;
+  /* Find the first word alphabetically not before the given prefix. */
+  uint lo = 0, hi = word_count - 1; /* Classic binary search. */
   while(lo < hi) {
     uint mid = (lo + hi) / 2;
     if(strcmp(wordlist[mid], prefix) < 0) {
@@ -270,7 +265,7 @@ uint update_one_remain(uint x, uint y, uint dx, uint dy) {
     uint xx = x + dx * j, yy = y + dy * j;
     if(square[xx][yy] == '.') {
       uint new_remain = possible[j] & remain[xx][yy];
-      /* If no character is possible in this position, dead end. */
+      /* If no character is possible in this position, this partial solution is a dead end. */
       if(new_remain == 0) { 
         remain_cutoffs++;
 	return 1;
@@ -282,7 +277,7 @@ uint update_one_remain(uint x, uint y, uint dx, uint dy) {
 	undo_push(xx);
 	undo_push(yy);
 	undo_push(UNDO_REMAIN);
-	/* Force the corresponding row/column to be checked again. */
+	/* Force the corresponding row or column to be checked again. */
 	if(dx == 0) {
 	  to_check[2 * yy + 1] = 1;
 	}
@@ -310,16 +305,16 @@ uint update_all_remains(uint level) {
 	  else {
 	    cv = two_count[ENC(square[v / 2][0])][ENC(square[v / 2][1])];
 	  }
-	  if(cv < bv) { /* We found the tighter level than the previous tightest one. */
+	  if(cv < bv) { /* We found a tighter level than the previous tightest one. */
 	    best_v = v;
 	    bv = cv;
 	  }
       }
     }
-    if(best_v == M) { /* All done with checking. */
+    if(best_v == M) { /* No levels to check, so all done with constraint propagation. */
       return 1;
     }
-    /* Update the remain sets for the chosen tightest row or column. */
+    /* Update the remain sets for the chosen tightest level. */
     to_check[best_v] = 0;
     if(best_v & 1 ? update_one_remain(0, best_v / 2, 1, 0) : update_one_remain(best_v / 2, 0, 0, 1)) {
       return 0;
@@ -350,7 +345,7 @@ uint verify_row_prefixes() {
   return 1;
 }
 
-/* Pop and execute instructions from the undo stack to restore previous state in backtracking. */
+/* Pop and execute instructions from the undo stack to downdate to previous state in backtracking. */
 void unroll_choices() {
   uint item;
   while((item = undo[--undo_top]) != UNDO_DONE) {
@@ -370,33 +365,32 @@ void unroll_choices() {
 /* Recursive backtracking algorithm to fill in the double word square. */
 void fill_square(uint level) {
   if(level > max_level) { max_level = level; }
-  if(level == PROGRESS || level == 2 * N) {
+  if(level == PROGRESS || level == 2 * N) { /* Print the complete square. */
     print_square();
   }
-  if(level == 2 * N) { /* The grid is complete and ready to be printed out. */
+  if(level == 2 * N) { /* The grid is complete. */
     return;
   }
   uint x, y, dx, dy;
-  if(level & 1) { /* Fill in a vertical column at this level of recursion. */
+  if(level & 1) { /* Fill in a vertical column at odd levels of recursion. */
     x = 0; y = level / 2; dx = 1; dy = 0;
   }
-  else { /* Fill in a horizontal row at this level of recursion. */
+  else { /* Fill in a horizontal row at even levels of recursion. */
     x = level / 2; y = 0; dx = 0; dy = 1;
   }
   find_prefix(word_buffer[level], x, y, dx, dy);
   uint i = level == 0 ? first_idx : bisect_left(word_buffer[level]);
   while(i < (level == 0 ? last_idx: word_count) && (level != 1 || i < first_row_idx) && starts_with(word_buffer[level], wordlist[i])) {
     if(!taken[i] && word_fits(wordlist[i], x, y, dx, dy)) {
-      if(level == 0) {
+      if(level == 0) { /* Place the current word in the first row as a special case. */
         first_row_idx = i;
         if(VERBOSE) {
           printf("\x1b[AMoving to word #%d '%s' (%ldMR and %ldMP), max level %d.\n",
 		   i - first_idx, wordlist[i], remain_cutoffs / 1000000, prefix_cutoffs / 1000000, max_level);
         }
       }
-      for(uint j = 0; j < 2 * N; j++) { to_check[j] = 0; }
       undo_push(UNDO_DONE);
-      place_word(wordlist[i], x, y, dx, dy);
+      place_word(wordlist[i], x, y, dx, dy, level == 3);
       if(
          (level != 2 || verify_col_prefixes()) &&
 	 (level != 3 || verify_row_prefixes()) &&
@@ -412,7 +406,7 @@ void fill_square(uint level) {
   }
 }
 
-/* Returns the word from the given position of the wordlist, or the empty string for positions outside the list. */
+/* Returns the word from the given position of the wordlist, or empty string for positions outside the list. */
 char* get_word(uint idx) {
   return idx < word_count ? wordlist[idx] : "";
 }
@@ -429,13 +423,14 @@ int main(int argc, char** argv) {
     }
   }
 
-  /* Place the prefix on the first row. */
+  /* Starting word of the search. */
   if(argc > 1) {
     first = malloc(strlen(argv[1]) + 1);
     strcpy(first, argv[1]);
     first_idx = bisect_left(first);
   }
 
+  /* Ending word of the search. */
   if(argc > 2) {
     last = malloc(strlen(argv[2]) + 1);
     strcpy(last, argv[2]);
