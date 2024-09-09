@@ -9,7 +9,13 @@ You can compile `wordsquare.c` with your favourite C compiler. You should first 
 ./wordsquare prefix_start prefix_end
 ```
 
-where `prefix_start` is the prefix of the word in the first row of the grid where the program will start searching for double word squares, and `prefix_end` is the prefix where the search stops.
+where `prefix_start` is the prefix of the word in the first row of the grid where the program will start searching for double word squares, and `prefix_end` is the prefix where the search stops. For example,
+
+```
+./wordsquare p q
+```
+
+would generate all double word squares whose first word starts with the letter p.
 
 The program uses backtracking search that fills the grid alternating between filling rows and columns, aided with constraint propagation for the unfilled cells in the remaining grid, plus some other small optimizations. The program generates all possible word squares in alphabetical order of the word in the first row. Since double word squares are symmetric anyway, the word in the first column is constrained to be lexicographically smaller than the word in the first row, even as it starts with the same letter.
 
