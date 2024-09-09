@@ -3,7 +3,7 @@ This repository contains a program to generate [double word squares](https://en.
 
 The C source code file `wordsquare.c` is self-contained and has no dependencies outside the standard library. It has been hardcoded to use the file `words_sorted.txt` as the wordlist, easy enough to change.
 
-You can compile `wordsquare.c` with your favourite C compiler. You should first edit the constant `N` to determine the size of the grid. It has currently been set to 6 for demonstration purposes. However, the largest known double word squares in English have the length 8, so you can make it 9 to look for double word squares of that size and become famous for being the first person to discover one. Once compiled, you just start the run the program with the command
+You can compile `wordsquare.c` with your favourite C compiler. You should first edit the constant `N` to determine the size of the grid. It has currently been set to 6 for demonstration purposes. Once compiled, you just start the run the program with the command
 
 ```
 ./wordsquare prefix_start prefix_end
