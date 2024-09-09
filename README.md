@@ -1,5 +1,5 @@
 # Wordsquare
-This repository contains a program to generate [double word squares](https://en.wikipedia.org/wiki/Word_square#Double_word_squares) of given size.
+This repository contains a program to generate [double word squares](https://en.wikipedia.org/wiki/Word_square#Double_word_squares) of given size. The author used it to perform an exhaustive search to verify that no double word squares of order 9 exist in English.
 
 The C source code file `wordsquare.c` is self-contained and has no dependencies outside the standard library. It has been hardcoded to use the file `words_sorted.txt` as the wordlist, easy enough to change.
 
