@@ -1,6 +1,6 @@
 /*
 Author: Ilkka Kokkarinen, ilkka.kokkarinen@gmail.com
-Date: Sep 9, 2024
+Date: Sep 12, 2024
 GitHub: https://github.com/ikokkari/Wordsquare
 */
 
@@ -10,6 +10,10 @@ GitHub: https://github.com/ikokkari/Wordsquare
 #include "assert.h"
 #include "limits.h"
 
+/* Are we looking for double or single word squares? */
+#define DOUBLE 1
+#define STAT_DIV (DOUBLE ? 1000000 : 1000)
+
 /* Big number to mean "none". */
 #define M UINT_MAX
 
@@ -17,7 +21,7 @@ GitHub: https://github.com/ikokkari/Wordsquare
 #define VERBOSE 0
 
 /* Level at which an intermediate grid is printed. */
-#define PROGRESS 42
+#define PROGRESS 99
 
 /* Size of grid square */
 #define N 6
@@ -64,7 +68,7 @@ char word_buffer[2 * N][N + 1];
 /* The undo stack used to store the operations to restore previous state in backtracking. */
 uint* undo;
 uint undo_top = 0;
-uint undo_capacity = 100;
+uint undo_capacity = 100; /* Just the initial capacity, this will grow */
 
 /* Rows and columns that need to be checked in consistency propagation. */
 uint* to_check;
@@ -91,6 +95,7 @@ uint first_row_idx = 0;
 ulong remain_cutoffs = 0;
 ulong prefix_cutoffs = 0;
 uint max_level = 0;
+char max_word[N + 1];
 
 /* Read the list of words from the file words_sorted.txt, keeping the words of length N. */
 void read_wordlist() {
@@ -262,30 +267,26 @@ uint update_one_remain(uint x, uint y, uint dx, uint dy) {
 
   /* Update the remain character set for the positions in the current row or column. */
   for(uint j = 0; j < N; j++) {
-    uint xx = x + dx * j, yy = y + dy * j;
-    if(square[xx][yy] == '.') {
-      uint new_remain = possible[j] & remain[xx][yy];
+    if(square[x][y] == '.') {
+      uint new_remain = possible[j] & remain[x][y];
       /* If no character is possible in this position, this partial solution is a dead end. */
       if(new_remain == 0) { 
         remain_cutoffs++;
 	return 1;
       }
       /* If the set of remaining characters has decreased, record the change. */
-      if(new_remain != remain[xx][yy]) {
-	undo_push(remain[xx][yy]);
-	remain[xx][yy] = new_remain;
-	undo_push(xx);
-	undo_push(yy);
+      if(new_remain != remain[x][y]) {
+	undo_push(remain[x][y]);
+	remain[x][y] = new_remain;
+	undo_push(x);
+	undo_push(y);
 	undo_push(UNDO_REMAIN);
-	/* Force the corresponding row or column to be checked again. */
-	if(dx == 0) {
-	  to_check[2 * yy + 1] = 1;
-	}
-	else {
-	  to_check[2 * xx] = 1;
-	}
+	/* Force the perpendicular row or column to be checked again. */
+	to_check[dx == 0 ? 2 * y + 1 : 2 * x] = 1;
       }
     }
+    x += dx;
+    y += dy;
   }
   return 0;
 }
@@ -317,16 +318,16 @@ uint update_all_remains(uint level) {
     /* Update the remain sets for the chosen tightest level. */
     to_check[best_v] = 0;
     if(best_v & 1 ? update_one_remain(0, best_v / 2, 1, 0) : update_one_remain(best_v / 2, 0, 0, 1)) {
-      return 0;
+      return 0; /* Some remain set became empty, yay, we can backtrack. */
     }
   }
   return 1;
 }
 
-/* Verify that the two words on the first two rows are possible to complete into column words. */  
-uint verify_col_prefixes() {
+/* Verify that the two words on the first two rows are possible to complete into column words. */
+uint verify_col_prefixes(char* word) {
   for(uint j = 1; j < N; j++) {
-    if(two_start[ENC(square[0][j])][ENC(square[1][j])] == M) {
+    if(two_start[ENC(square[0][j])][ENC(word[j])] == M) {
       prefix_cutoffs++;
       return 0;
     }
@@ -335,9 +336,9 @@ uint verify_col_prefixes() {
 }
 
 /* Verify that the two words on the first two columns are possible to complete into row words. */
-uint verify_row_prefixes() {
+uint verify_row_prefixes(char* word) {
   for(uint i = 2; i < N; i++) {
-    if(two_start[ENC(square[i][0])][ENC(square[i][1])] == M) {
+    if(two_start[ENC(square[i][0])][ENC(word[i])] == M) {
       prefix_cutoffs++;
       return 0;
     }
@@ -364,7 +365,10 @@ void unroll_choices() {
 
 /* Recursive backtracking algorithm to fill in the double word square. */
 void fill_square(uint level) {
-  if(level > max_level) { max_level = level; }
+  if(level > max_level) {
+    max_level = level;
+    find_prefix(max_word, 0, 0, 0, 1);
+  }
   if(level == PROGRESS || level == 2 * N) { /* Print the complete square. */
     print_square();
   }
@@ -380,27 +384,33 @@ void fill_square(uint level) {
   }
   find_prefix(word_buffer[level], x, y, dx, dy);
   uint i = level == 0 ? first_idx : bisect_left(word_buffer[level]);
-  while(i < (level == 0 ? last_idx: word_count) && (level != 1 || i < first_row_idx) && starts_with(word_buffer[level], wordlist[i])) {
+  while(i < (level == 0 ? last_idx: word_count) &&
+	(level != 1 || i < first_row_idx) &&
+	(level == 0 || starts_with(word_buffer[level], wordlist[i]))) {
     if(!taken[i] && word_fits(wordlist[i], x, y, dx, dy)) {
       if(level == 0) { /* Place the current word in the first row as a special case. */
         first_row_idx = i;
         if(VERBOSE) {
-          printf("\x1b[AMoving to word #%d '%s' (%ldMR and %ldMP), max level %d.\n",
-		   i - first_idx, wordlist[i], remain_cutoffs / 1000000, prefix_cutoffs / 1000000, max_level);
+          printf("\x1b[AMoving to #%d '%s' (%ldMR and %ldMP), max level %d (%s).\n",
+		 i, wordlist[i], remain_cutoffs / STAT_DIV, prefix_cutoffs / STAT_DIV, max_level, max_word);
         }
       }
-      undo_push(UNDO_DONE);
-      place_word(wordlist[i], x, y, dx, dy, level == 3);
-      if(
-         (level != 2 || verify_col_prefixes()) &&
-	 (level != 3 || verify_row_prefixes()) &&
-	 (level != 3 || update_all_remains(level + 1))
-      ) {
-	taken[i] = 1;
-	fill_square(level + 1);
-	taken[i] = 0;
+      uint prefixes_fit = 1;
+      if(level == 2) { prefixes_fit = verify_col_prefixes(wordlist[i]); }
+      if(level == 3) { prefixes_fit = verify_row_prefixes(wordlist[i]); }
+      if(prefixes_fit) {
+	undo_push(UNDO_DONE);
+	place_word(wordlist[i], x, y, dx, dy, level == 3);
+	if(!DOUBLE) {
+	  place_word(wordlist[i], y, x, dy, dx, level == 3);
+	}
+	if(!(level == 3 || (!DOUBLE && level == 2)) || update_all_remains(level + 1)) {
+	  taken[i] = 1;
+	  fill_square(DOUBLE? level + 1 : level + 2);
+	  taken[i] = 0;
+	}
+	unroll_choices();
       }
-      unroll_choices();
     }
     i++;
   }
@@ -415,7 +425,8 @@ char* get_word(uint idx) {
 int main(int argc, char** argv) {
   read_wordlist();
   undo = malloc(sizeof(uint) * undo_capacity);
-  to_check = calloc(3 * N, sizeof(uint));
+  to_check = calloc(2 * N, sizeof(uint));
+  strcpy(max_word, "$");
   for(uint x = 0; x < N; x++) {
     for(uint y = 0; y < N; y++) {
       remain[x][y] = ALPHA_MASK; /* Integer with the lowest ALPHABET bits on. */
@@ -438,6 +449,7 @@ int main(int argc, char** argv) {
   }
 
   if(VERBOSE) {
+    printf("Looking for %s word squares.\n", DOUBLE ? "double" : "single");
     printf("Starting search from %s (#%d) to %s (#%d).\n\n",
 	   get_word(first_idx), first_idx, get_word(last_idx), last_idx);
   }
