@@ -12,7 +12,7 @@ GitHub: https://github.com/ikokkari/Wordsquare
 
 /* Are we looking for double or single word squares? */
 #define DOUBLE 1
-#define STAT_DIV (DOUBLE ? 1000 : 1)
+#define STAT_DIV (DOUBLE ? 1000000 : 1000)
 
 /* Big number to mean "none". */
 #define M UINT_MAX
