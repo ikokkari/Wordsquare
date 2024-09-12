@@ -51,8 +51,14 @@ uint one_start[ALPHABET];
 /* Starting position of each two character prefix in the wordlist. */
 uint two_start[ALPHABET][ALPHABET];
 
+/* Starting position of each three character prefix in the wordlist. */
+uint three_start[ALPHABET][ALPHABET][ALPHABET];
+
 /* How many words start with each two character prefix. */
 uint two_count[ALPHABET][ALPHABET];
+
+/* How many words start with each three character prefix. */
+uint three_count[ALPHABET][ALPHABET][ALPHABET];
 
 /* For each cell of the square, the characters that are still possible for that cell,
    encoded as a bit vector in the lowest 26 bits of the unsigned integer. */
@@ -99,11 +105,16 @@ char max_word[N + 1];
 
 /* Read the list of words from the file words_sorted.txt, keeping the words of length N. */
 void read_wordlist() {
+  /* Initialize the table entries */
   for(uint i = 0; i < ALPHABET; i++) {
     one_start[i] = M;
     for(uint j = 0; j < ALPHABET; j++) {
       two_start[i][j] = M;
       two_count[i][j] = 0;
+      for(uint k = 0; k < ALPHABET; k++) {
+	three_start[i][j][k] = M;
+	three_count[i][j][k]= 0;
+      }
     }
   }
   char buffer[100];
@@ -116,13 +127,20 @@ void read_wordlist() {
     buffer[j] = '\0';
     if(j == N) {
       strcpy(wordlist[word_count], buffer);
+      /* One letter prefixes */
       if(one_start[ENC(buffer[0])] == M) {
 	one_start[ENC(buffer[0])] = word_count;
       }
+      /* Two letter prefixes */
       if(two_start[ENC(buffer[0])][ENC(buffer[1])] == M) {
 	two_start[ENC(buffer[0])][ENC(buffer[1])] = word_count;
       }
       two_count[ENC(buffer[0])][ENC(buffer[1])]++;
+      /* Three letter prefixes */
+      if(three_start[ENC(buffer[0])][ENC(buffer[1])][ENC(buffer[2])] == M) {
+	three_start[ENC(buffer[0])][ENC(buffer[1])][ENC(buffer[2])] = word_count;
+      }
+      three_count[ENC(buffer[0])][ENC(buffer[1])][ENC(buffer[2])]++;
       word_count++;
     }
   }
@@ -205,12 +223,15 @@ void find_prefix(char* buffer, uint x, uint y, uint dx, uint dy) {
 
 /* Binary search to find the position of the first word that starts with the given prefix. */ 
 uint bisect_left(char* prefix) {
-  /* Look up the precomputed results for one- and two-character prefixes. */
+  /* Look up the precomputed results for one-, two- and three-character prefixes. */
   if(prefix[1] == '\0') {
     return one_start[ENC(prefix[0])];
   }
   if(prefix[2] == '\0') {
     return two_start[ENC(prefix[0])][ENC(prefix[1])];
+  }
+  if(prefix[3] == '\0') {
+    return three_start[ENC(prefix[0])][ENC(prefix[1])][ENC(prefix[2])];
   }
   
   /* Prefix is after the last word in the wordlist. */
@@ -301,10 +322,10 @@ uint update_all_remains(uint level) {
       if(to_check[v]) {
 	  uint cv;
 	  if(v & 1) {
-	    cv = two_count[ENC(square[0][v / 2])][ENC(square[1][v / 2])];
+	    cv = three_count[ENC(square[0][v / 2])][ENC(square[1][v / 2])][ENC(square[2][v / 2])];
 	  }
 	  else {
-	    cv = two_count[ENC(square[v / 2][0])][ENC(square[v / 2][1])];
+	    cv = three_count[ENC(square[v / 2][0])][ENC(square[v / 2][1])][ENC(square[v / 2][2])];
 	  }
 	  if(cv < bv) { /* We found a tighter level than the previous tightest one. */
 	    best_v = v;
@@ -335,10 +356,32 @@ uint verify_col_prefixes(char* word) {
   return 1;
 }
 
+/* Verify that the three words on the first two rows are possible to complete into column words. */
+uint verify_col_prefixes_three(char* word) {
+  for(uint j = 2; j < N; j++) {
+    if(three_start[ENC(square[0][j])][ENC(square[1][j])][ENC(word[j])]== M) {
+      prefix_cutoffs++;
+      return 0;
+    }
+  }
+  return 1;
+}
+
 /* Verify that the two words on the first two columns are possible to complete into row words. */
 uint verify_row_prefixes(char* word) {
   for(uint i = 2; i < N; i++) {
     if(two_start[ENC(square[i][0])][ENC(word[i])] == M) {
+      prefix_cutoffs++;
+      return 0;
+    }
+  }
+  return 1;
+}
+
+/* Verify that the three words on the first two columns are possible to complete into row words. */
+uint verify_row_prefixes_three(char* word) {
+  for(uint i = 2; i < N; i++) {
+    if(three_start[ENC(square[i][0])][ENC(square[i][1])][ENC(word[i])] == M) {
       prefix_cutoffs++;
       return 0;
     }
@@ -391,20 +434,22 @@ void fill_square(uint level) {
       if(level == 0) { /* Place the current word in the first row as a special case. */
         first_row_idx = i;
         if(VERBOSE) {
-          printf("\x1b[AMoving to #%d '%s' (%ldMR and %ldMP), max level %d (%s).\n",
+          printf("\x1b[AMoving to #%d '%s' (%ldR and %ldP), max level %d (%s).\n",
 		 i, wordlist[i], remain_cutoffs / STAT_DIV, prefix_cutoffs / STAT_DIV, max_level, max_word);
         }
       }
       uint prefixes_fit = 1;
       if(level == 2) { prefixes_fit = verify_col_prefixes(wordlist[i]); }
-      if(level == 3) { prefixes_fit = verify_row_prefixes(wordlist[i]); }
+      else if(level == 3) { prefixes_fit = verify_row_prefixes(wordlist[i]); }
+      else if(level == 4) { prefixes_fit = verify_col_prefixes_three(wordlist[i]); }
+      else if(level == 5) { prefixes_fit = verify_row_prefixes_three(wordlist[i]); }
       if(prefixes_fit) {
 	undo_push(UNDO_DONE);
 	place_word(wordlist[i], x, y, dx, dy, level == 3);
 	if(!DOUBLE) {
 	  place_word(wordlist[i], y, x, dy, dx, level == 3);
 	}
-	if(!DOUBLE || (level != 3 || update_all_remains(level + 1))) {
+	if(!DOUBLE || level != 5 || update_all_remains(level + 1)) {
 	  taken[i] = 1;
 	  fill_square(DOUBLE? level + 1 : level + 2);
 	  taken[i] = 0;
@@ -449,9 +494,8 @@ int main(int argc, char** argv) {
   }
 
   if(VERBOSE) {
-    printf("Looking for %s word squares of order %d.\n", DOUBLE ? "double" : "single", N);
-    printf("Starting search from %s (#%d) to %s (#%d).\n\n",
-	   get_word(first_idx), first_idx, get_word(last_idx), last_idx);
+    printf("%s word squares of N = %d, ", DOUBLE ? "Double" : "Single", N);
+    printf("from %s (#%d) to %s (#%d).\n\n", get_word(first_idx), first_idx, get_word(last_idx), last_idx);
   }
     
   /* Do the watussi, Johnny */
