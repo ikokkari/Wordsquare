@@ -12,7 +12,7 @@ GitHub: https://github.com/ikokkari/Wordsquare
 
 /* Are we looking for double or single word squares? */
 #define DOUBLE 1
-#define STAT_DIV (DOUBLE ? 1000000 : 1000)
+#define STAT_DIV (DOUBLE ? 1000 : 1)
 
 /* Big number to mean "none". */
 #define M UINT_MAX
@@ -404,7 +404,7 @@ void fill_square(uint level) {
 	if(!DOUBLE) {
 	  place_word(wordlist[i], y, x, dy, dx, level == 3);
 	}
-	if(!(level == 3 || (!DOUBLE && level == 2)) || update_all_remains(level + 1)) {
+	if(!DOUBLE || (level != 3 || update_all_remains(level + 1))) {
 	  taken[i] = 1;
 	  fill_square(DOUBLE? level + 1 : level + 2);
 	  taken[i] = 0;
@@ -449,7 +449,7 @@ int main(int argc, char** argv) {
   }
 
   if(VERBOSE) {
-    printf("Looking for %s word squares.\n", DOUBLE ? "double" : "single");
+    printf("Looking for %s word squares of order %d.\n", DOUBLE ? "double" : "single", N);
     printf("Starting search from %s (#%d) to %s (#%d).\n\n",
 	   get_word(first_idx), first_idx, get_word(last_idx), last_idx);
   }
