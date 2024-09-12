@@ -445,9 +445,9 @@ void fill_square(uint level) {
       else if(level == 5) { prefixes_fit = verify_row_prefixes_three(wordlist[i]); }
       if(prefixes_fit) {
 	undo_push(UNDO_DONE);
-	place_word(wordlist[i], x, y, dx, dy, level == 3);
+	place_word(wordlist[i], x, y, dx, dy, level == 5);
 	if(!DOUBLE) {
-	  place_word(wordlist[i], y, x, dy, dx, level == 3);
+	  place_word(wordlist[i], y, x, dy, dx, level == 5);
 	}
 	if(!DOUBLE || level != 5 || update_all_remains(level + 1)) {
 	  taken[i] = 1;
