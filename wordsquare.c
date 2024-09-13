@@ -322,10 +322,20 @@ uint update_all_remains(uint level) {
       if(to_check[v]) {
 	  uint cv;
 	  if(v & 1) {
-	    cv = three_count[ENC(square[0][v / 2])][ENC(square[1][v / 2])][ENC(square[2][v / 2])];
+	    if(level == 6) {
+	      cv = three_count[ENC(square[0][v / 2])][ENC(square[1][v / 2])][ENC(square[2][v / 2])];
+	    }
+	    else {
+	      cv = two_count[ENC(square[0][v / 2])][ENC(square[1][v / 2])];
+	    }
 	  }
 	  else {
-	    cv = three_count[ENC(square[v / 2][0])][ENC(square[v / 2][1])][ENC(square[v / 2][2])];
+	    if(level == 6) {
+	      cv = three_count[ENC(square[v / 2][0])][ENC(square[v / 2][1])][ENC(square[v / 2][2])];
+	    }
+	    else {
+	      cv = two_count[ENC(square[v / 2][0])][ENC(square[v / 2][1])];
+	    }
 	  }
 	  if(cv < bv) { /* We found a tighter level than the previous tightest one. */
 	    best_v = v;
@@ -333,7 +343,7 @@ uint update_all_remains(uint level) {
 	  }
       }
     }
-    if(best_v == M) { /* No levels to check, so all done with constraint propagation. */
+    if(best_v == M) { /* No levels to check, we are done with constraint propagation. */
       return 1;
     }
     /* Update the remain sets for the chosen tightest level. */
@@ -445,11 +455,11 @@ void fill_square(uint level) {
       else if(level == 5) { prefixes_fit = verify_row_prefixes_three(wordlist[i]); }
       if(prefixes_fit) {
 	undo_push(UNDO_DONE);
-	place_word(wordlist[i], x, y, dx, dy, level == 5);
+	place_word(wordlist[i], x, y, dx, dy, level == 3);
 	if(!DOUBLE) {
-	  place_word(wordlist[i], y, x, dy, dx, level == 5);
+	  place_word(wordlist[i], y, x, dy, dx, level == 3);
 	}
-	if(!DOUBLE || level != 5 || update_all_remains(level + 1)) {
+	if(!DOUBLE || level != 3 || update_all_remains(level + 1)) {
 	  taken[i] = 1;
 	  fill_square(DOUBLE? level + 1 : level + 2);
 	  taken[i] = 0;
