@@ -19,7 +19,7 @@ would generate all double word squares whose first word starts with the letter `
 
 The program uses backtracking search that fills the grid alternating between filling rows and columns, aided with constraint propagation for the unfilled cells in the remaining grid, plus some other small optimizations. The program generates all possible word squares in alphabetical order of the word in the first row. Since double word squares are symmetric anyway, the word in the first column is constrained to be lexicographically smaller than the word in the first row, even as it starts with the same letter.
 
-By changing the variable `DOUBLE` to 0, the program looks for regular word squares whose rows and columns contain the same words. For order 9, exactly one regular word square was found:
+By setting the variable `DOUBLE` to 0 before compilation, the program will look for regular word squares whose rows and columns contain the same words. For order 9, exactly one regular word square was found:
 
 ```
 necessism
